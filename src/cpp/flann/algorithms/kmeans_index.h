@@ -218,7 +218,7 @@ public:
         size_t old_size = size_;
 
         extendDataset(points);
-        
+
         if (rebuild_threshold>1 && size_at_build_*rebuild_threshold<size_) {
             buildIndex();
         }
@@ -226,7 +226,7 @@ public:
             for (size_t i=0;i<points.rows;++i) {
                 DistanceType dist = distance_(root_->pivot, points[i], veclen_);
                 addPointToTree(root_, old_size + i, dist);
-            }            
+            }
         }
     }
 
@@ -511,7 +511,7 @@ private:
         for (size_t j=0; j<veclen_; ++j) {
             mean[j] *= div_factor;
         }
-        
+
         DistanceType radius = 0;
         DistanceType variance = 0;
         for (size_t i=0; i<size; ++i) {
@@ -520,7 +520,7 @@ private:
                 radius = dist;
             }
             variance += dist;
-        }        
+        }
         variance /= size;
 
         node->variance = variance;
@@ -541,177 +541,48 @@ private:
      *
      * TODO: for 1-sized clusters don't store a cluster center (it's the same as the single cluster point)
      */
-    void computeClustering(NodePtr node, int* indices, int indices_length, int branching)
-    {
-        node->size = indices_length;
+     void computeClustering(NodePtr node, int* indices, int indices_length, int branching){
+       node->size = indices_length;
 
-        if (indices_length < branching) {
-            node->points.resize(indices_length);
-            for (int i=0;i<indices_length;++i) {
-            	node->points[i].index = indices[i];
-            	node->points[i].point = points_[indices[i]];
-            }
-            node->childs.clear();
-            return;
-        }
+       //葉ノードを形成
+       if(indices_length < branching){
+         node->points.resize(indices_length);
+         for(int i = 0; i < indices_length; i++){
+           node->points[i].index = indices[i];
+           node->points[i].point = points_[indices[i]];
+         }
+         node->childs.clear();
+         return;
+       }
 
-        std::vector<int> centers_idx(branching);
-        int centers_length;
-        (*chooseCenters_)(branching, indices, indices_length, &centers_idx[0], centers_length);
+       //節ノードを形成
+       std::vector< std::vector<int> > cluster_points(branching);
+       int each_cluster_points = indices_length / branching;
+       int amari = indices_length % branching;
 
-        if (centers_length<branching) {
-            node->points.resize(indices_length);
-            for (int i=0;i<indices_length;++i) {
-            	node->points[i].index = indices[i];
-            	node->points[i].point = points_[indices[i]];
-            }
-            node->childs.clear();
-            return;
-        }
+       int start = 0;
+       for(int i = 0; i < branching - 1; i++){
+         int num = each_cluster_points;
+         if(i < amari){
+           num++;
+         }
+         cluster_points[i] = std::vector<int>(num);
+         for(int j = 0; j < num; j++){
+           cluster_points[i][j] = indices[start + j];
+         }
 
+         start += num;
+       }
 
-        Matrix<double> dcenters(new double[branching*veclen_],branching,veclen_);
-        for (int i=0; i<centers_length; ++i) {
-            ElementType* vec = points_[centers_idx[i]];
-            for (size_t k=0; k<veclen_; ++k) {
-                dcenters[i][k] = double(vec[k]);
-            }
-        }
+       node->childs.resize(branching);
 
-        std::vector<DistanceType> radiuses(branching,0);
-        std::vector<int> count(branching,0);
+       for(int c = 0; c < branching; c++){
+         node->childs[c] = new(pool_) Node();
 
-        //	assign points to clusters
-        std::vector<int> belongs_to(indices_length);
-        for (int i=0; i<indices_length; ++i) {
-
-            DistanceType sq_dist = distance_(points_[indices[i]], dcenters[0], veclen_);
-            belongs_to[i] = 0;
-            for (int j=1; j<branching; ++j) {
-                DistanceType new_sq_dist = distance_(points_[indices[i]], dcenters[j], veclen_);
-                if (sq_dist>new_sq_dist) {
-                    belongs_to[i] = j;
-                    sq_dist = new_sq_dist;
-                }
-            }
-            if (sq_dist>radiuses[belongs_to[i]]) {
-                radiuses[belongs_to[i]] = sq_dist;
-            }
-            count[belongs_to[i]]++;
-        }
-
-        bool converged = false;
-        int iteration = 0;
-        while (!converged && iteration<iterations_) {
-            converged = true;
-            iteration++;
-
-            // compute the new cluster centers
-            for (int i=0; i<branching; ++i) {
-                memset(dcenters[i],0,sizeof(double)*veclen_);
-                radiuses[i] = 0;
-            }
-            for (int i=0; i<indices_length; ++i) {
-                ElementType* vec = points_[indices[i]];
-                double* center = dcenters[belongs_to[i]];
-                for (size_t k=0; k<veclen_; ++k) {
-                    center[k] += vec[k];
-                }
-            }
-            for (int i=0; i<branching; ++i) {
-                int cnt = count[i];
-                double div_factor = 1.0/cnt;
-                for (size_t k=0; k<veclen_; ++k) {
-                    dcenters[i][k] *= div_factor;
-                }
-            }
-
-            // reassign points to clusters
-            for (int i=0; i<indices_length; ++i) {
-                DistanceType sq_dist = distance_(points_[indices[i]], dcenters[0], veclen_);
-                int new_centroid = 0;
-                for (int j=1; j<branching; ++j) {
-                    DistanceType new_sq_dist = distance_(points_[indices[i]], dcenters[j], veclen_);
-                    if (sq_dist>new_sq_dist) {
-                        new_centroid = j;
-                        sq_dist = new_sq_dist;
-                    }
-                }
-                if (sq_dist>radiuses[new_centroid]) {
-                    radiuses[new_centroid] = sq_dist;
-                }
-                if (new_centroid != belongs_to[i]) {
-                    count[belongs_to[i]]--;
-                    count[new_centroid]++;
-                    belongs_to[i] = new_centroid;
-
-                    converged = false;
-                }
-            }
-
-            for (int i=0; i<branching; ++i) {
-                // if one cluster converges to an empty cluster,
-                // move an element into that cluster
-                if (count[i]==0) {
-                    int j = (i+1)%branching;
-                    while (count[j]<=1) {
-                        j = (j+1)%branching;
-                    }
-
-                    for (int k=0; k<indices_length; ++k) {
-                        if (belongs_to[k]==j) {
-                            belongs_to[k] = i;
-                            count[j]--;
-                            count[i]++;
-                            break;
-                        }
-                    }
-                    converged = false;
-                }
-            }
-
-        }
-
-        std::vector<DistanceType*> centers(branching);
-
-        for (int i=0; i<branching; ++i) {
-            centers[i] = new DistanceType[veclen_];
-            memoryCounter_ += veclen_*sizeof(DistanceType);
-            for (size_t k=0; k<veclen_; ++k) {
-                centers[i][k] = (DistanceType)dcenters[i][k];
-            }
-        }
-
-
-        // compute kmeans clustering for each of the resulting clusters
-        node->childs.resize(branching);
-        int start = 0;
-        int end = start;
-        for (int c=0; c<branching; ++c) {
-            int s = count[c];
-
-            DistanceType variance = 0;
-            for (int i=0; i<indices_length; ++i) {
-                if (belongs_to[i]==c) {
-                    variance += distance_(centers[c], points_[indices[i]], veclen_);
-                    std::swap(indices[i],indices[end]);
-                    std::swap(belongs_to[i],belongs_to[end]);
-                    end++;
-                }
-            }
-            variance /= s;
-
-            node->childs[c] = new(pool_) Node();
-            node->childs[c]->radius = radiuses[c];
-            node->childs[c]->pivot = centers[c];
-            node->childs[c]->variance = variance;
-            computeClustering(node->childs[c],indices+start, end-start, branching);
-            start=end;
-        }
-
-        delete[] dcenters.ptr();
-    }
-
+         computeNodeStatistics(node->childs[c], cluster_points[c]);
+         computeClustering(node->childs[c], cluster_points[c].data(), cluster_points[c].size(), branching);
+       }
+     }
 
     template<bool with_removed>
     void findNeighborsWithRemoved(ResultSet<DistanceType>& result, const ElementType* vec, const SearchParams& searchParams) const
@@ -967,7 +838,7 @@ private:
         varianceValue = meanVariance/root->size;
         return clusterCount;
     }
-    
+
     void addPointToTree(NodePtr node, size_t index, DistanceType dist_to_pivot)
     {
         ElementType* point = points_[index];
@@ -977,7 +848,7 @@ private:
         // if radius changed above, the variance will be an approximation
         node->variance = (node->size*node->variance+dist_to_pivot)/(node->size+1);
         node->size++;
-        
+
         if (node->childs.empty()) { // leaf node
         	PointInfo point_info;
         	point_info.index = index;
@@ -993,7 +864,7 @@ private:
                 computeClustering(node, &indices[0], indices.size(), branching_);
             }
         }
-        else {            
+        else {
             // find the closest child
             int closest = 0;
             DistanceType dist = distance_(node->childs[closest]->pivot, point, veclen_);
@@ -1005,7 +876,7 @@ private:
                 }
             }
             addPointToTree(node->childs[closest], index, dist);
-        }                
+        }
     }
 
 
@@ -1039,7 +910,7 @@ private:
      * of the cluster.
      */
     float cb_index_;
-    
+
     /**
      * The root node in the tree.
      */
