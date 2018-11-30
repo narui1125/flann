@@ -50,6 +50,12 @@
 #include "flann/util/saving.h"
 #include "flann/util/logger.h"
 
+//自作関数
+#include <boost/foreach.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+
+#define JSON_PATH "~/tree.json"
 
 
 namespace flann
@@ -529,6 +535,69 @@ private:
         node->pivot = mean;
     }
 
+    /**
+    * 自作関数
+    */
+    std::vector<int> getLeafs(NodePtr node){
+      std::vector<int> result;
+
+      for(auto elem: node->points){
+        result.push_back(elem.index);
+      }
+
+      for(auto child: node->childs){
+        std::vector<int> child_points = getLeafs(child);
+        for(auto elem: child_points){
+          result.push_back(elem);
+        }
+      }
+
+      return result;
+    }
+
+    /**
+    * 自作関数
+    */
+    NodePtr parseTree(const boost::property_tree::ptree &json_node){
+      struct Node *node = new(pool_) Node();
+
+      //points
+      for(auto &clusters: json_node.get_child("points")){
+        //葉ノードを作成
+        struct Node *child_node = new(pool_) Node();
+
+        child_node->points.resize(clusters.second.size());
+        int count = 0;
+
+        for(auto &points : clusters.second){
+          int index = points.second.get_value<int>();
+          child_node->points[count].index = index;
+          child_node->points[count].point = points_[index];
+          count++;
+        }
+        child_node->childs.clear();
+
+        computeNodeStatistics(child_node, getLeafs(child_node));
+
+        //節ノードに葉ノードを追加
+        node->childs.push_back(child_node);
+      }
+
+      //childs
+      BOOST_FOREACH(const boost::property_tree::ptree::value_type& child, json_node.get_child("childs")){
+        const boost::property_tree::ptree& childs = child.second;
+        struct Node *child_node = parseTree(childs);
+
+        computeNodeStatistics(child_node, getLeafs(child_node));
+
+        //節ノードに節ノードを追加
+        node->childs.push_back(child_node);
+      }
+
+      computeNodeStatistics(node, getLeafs(node));
+
+      return node;
+    }
 
     /**
      * The method responsible with actually doing the recursive hierarchical
@@ -542,46 +611,10 @@ private:
      * TODO: for 1-sized clusters don't store a cluster center (it's the same as the single cluster point)
      */
      void computeClustering(NodePtr node, int* indices, int indices_length, int branching){
-       node->size = indices_length;
+       boost::property_tree::ptree root;
+       boost::property_tree::read_json(JSON_PATH, root);
 
-       //葉ノードを形成
-       if(indices_length < branching){
-         node->points.resize(indices_length);
-         for(int i = 0; i < indices_length; i++){
-           node->points[i].index = indices[i];
-           node->points[i].point = points_[indices[i]];
-         }
-         node->childs.clear();
-         return;
-       }
-
-       //節ノードを形成
-       std::vector< std::vector<int> > cluster_points(branching);
-       int each_cluster_points = indices_length / branching;
-       int amari = indices_length % branching;
-
-       int start = 0;
-       for(int i = 0; i < branching - 1; i++){
-         int num = each_cluster_points;
-         if(i < amari){
-           num++;
-         }
-         cluster_points[i] = std::vector<int>(num);
-         for(int j = 0; j < num; j++){
-           cluster_points[i][j] = indices[start + j];
-         }
-
-         start += num;
-       }
-
-       node->childs.resize(branching);
-
-       for(int c = 0; c < branching; c++){
-         node->childs[c] = new(pool_) Node();
-
-         computeNodeStatistics(node->childs[c], cluster_points[c]);
-         computeClustering(node->childs[c], cluster_points[c].data(), cluster_points[c].size(), branching);
-       }
+       node = parseTree(root);
      }
 
     template<bool with_removed>
