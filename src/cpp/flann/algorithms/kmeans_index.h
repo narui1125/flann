@@ -601,7 +601,10 @@ private:
         }
         child_node->childs.clear();
 
-        computeNodeStatistics(child_node, getLeafs(child_node));
+        auto indices = getLeafs(child_node);
+        child_node->size = indices.size();
+
+        computeNodeStatistics(child_node, indices);
         //節ノードに葉ノードを追加
         node->childs.push_back(child_node);
       }
@@ -613,13 +616,19 @@ private:
         struct Node *child_node = new(pool_) Node();
         parseTree(child_node, childs);
 
-        computeNodeStatistics(child_node, getLeafs(child_node));
+        auto indices = getLeafs(child_node);
+        child_node->size = indices.size();
+
+        computeNodeStatistics(child_node, indices);
 
         //節ノードに節ノードを追加
         node->childs.push_back(child_node);
       }
 
-      computeNodeStatistics(node, getLeafs(node));
+      auto indices = getLeafs(node);
+      node->size = indices.size();
+
+      computeNodeStatistics(node, indices);
 
       return node;
     }
