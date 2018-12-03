@@ -350,10 +350,12 @@ protected:
         computeNodeStatistics(root_, indices);
         computeClustering(root_, &indices[0], (int)size_, branching_);
 
+        /*
         std::cout << "variance: " << root_->variance << std::endl;
         std::cout << "radius: " << root_->radius << std::endl;
         std::cout << "pivot: " << root_->pivot << std::endl;
         printTree(root_, 0);
+        */
     }
 
 private:
@@ -652,7 +654,9 @@ private:
        parseTree(node, root);
      }
 
-
+     /*
+      元々のkMeans
+     */
      /*
      void computeClustering(NodePtr node, int* indices, int indices_length, int branching)
     {
