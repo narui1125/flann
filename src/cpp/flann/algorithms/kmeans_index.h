@@ -37,6 +37,7 @@
 #include <cassert>
 #include <limits>
 #include <cmath>
+#include <iostream>
 
 #include "flann/general.h"
 #include "flann/algorithms/nn_index.h"
@@ -55,7 +56,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
-#define JSON_PATH "~/tree.json"
+#define JSON_PATH "/tree.json"
 
 
 namespace flann
@@ -348,6 +349,11 @@ protected:
         root_ = new(pool_) Node();
         computeNodeStatistics(root_, indices);
         computeClustering(root_, &indices[0], (int)size_, branching_);
+
+        std::cout << "variance: " << root_->variance << std::endl;
+        std::cout << "radius: " << root_->radius << std::endl;
+        std::cout << "pivot: " << root_->pivot << std::endl;
+        printTree(root_, 0);
     }
 
 private:
@@ -538,6 +544,26 @@ private:
     /**
     * 自作関数
     */
+    void printTree(NodePtr node, int depth){
+
+      if((node->points).size() != 0){
+        for(int i = 0; i < depth; i++){
+          std::cout << "-" << std::flush;
+        }
+        for(int p = 0; p < (node->points).size(); p++){
+          std::cout << (node->points)[p].index << "," << std::flush;
+        }
+        std::cout << std::endl;
+      }
+
+      for(int c = 0; c < (node->childs).size(); c++){
+        printTree((node->childs)[c], depth+1);
+      }
+    }
+
+    /**
+    * 自作関数
+    */
     std::vector<int> getLeafs(NodePtr node){
       std::vector<int> result;
 
@@ -558,9 +584,7 @@ private:
     /**
     * 自作関数
     */
-    NodePtr parseTree(const boost::property_tree::ptree &json_node){
-      struct Node *node = new(pool_) Node();
-
+    NodePtr parseTree(NodePtr node, const boost::property_tree::ptree &json_node){
       //points
       for(auto &clusters: json_node.get_child("points")){
         //葉ノードを作成
@@ -578,7 +602,6 @@ private:
         child_node->childs.clear();
 
         computeNodeStatistics(child_node, getLeafs(child_node));
-
         //節ノードに葉ノードを追加
         node->childs.push_back(child_node);
       }
@@ -586,7 +609,9 @@ private:
       //childs
       BOOST_FOREACH(const boost::property_tree::ptree::value_type& child, json_node.get_child("childs")){
         const boost::property_tree::ptree& childs = child.second;
-        struct Node *child_node = parseTree(childs);
+
+        struct Node *child_node = new(pool_) Node();
+        parseTree(child_node, childs);
 
         computeNodeStatistics(child_node, getLeafs(child_node));
 
@@ -610,12 +635,187 @@ private:
      *
      * TODO: for 1-sized clusters don't store a cluster center (it's the same as the single cluster point)
      */
+
      void computeClustering(NodePtr node, int* indices, int indices_length, int branching){
        boost::property_tree::ptree root;
        boost::property_tree::read_json(JSON_PATH, root);
 
-       node = parseTree(root);
+       parseTree(node, root);
      }
+
+
+     /*
+     void computeClustering(NodePtr node, int* indices, int indices_length, int branching)
+    {
+        node->size = indices_length;
+
+        if (indices_length < branching) {
+            node->points.resize(indices_length);
+            for (int i=0;i<indices_length;++i) {
+            	node->points[i].index = indices[i];
+            	node->points[i].point = points_[indices[i]];
+            }
+            node->childs.clear();
+            return;
+        }
+
+        std::vector<int> centers_idx(branching);
+        int centers_length;
+        (*chooseCenters_)(branching, indices, indices_length, &centers_idx[0], centers_length);
+
+        if (centers_length<branching) {
+            node->points.resize(indices_length);
+            for (int i=0;i<indices_length;++i) {
+            	node->points[i].index = indices[i];
+            	node->points[i].point = points_[indices[i]];
+            }
+            node->childs.clear();
+            return;
+        }
+
+
+        Matrix<double> dcenters(new double[branching*veclen_],branching,veclen_);
+        for (int i=0; i<centers_length; ++i) {
+            ElementType* vec = points_[centers_idx[i]];
+            for (size_t k=0; k<veclen_; ++k) {
+                dcenters[i][k] = double(vec[k]);
+            }
+        }
+
+        std::vector<DistanceType> radiuses(branching,0);
+        std::vector<int> count(branching,0);
+
+        //	assign points to clusters
+        std::vector<int> belongs_to(indices_length);
+        for (int i=0; i<indices_length; ++i) {
+
+            DistanceType sq_dist = distance_(points_[indices[i]], dcenters[0], veclen_);
+            belongs_to[i] = 0;
+            for (int j=1; j<branching; ++j) {
+                DistanceType new_sq_dist = distance_(points_[indices[i]], dcenters[j], veclen_);
+                if (sq_dist>new_sq_dist) {
+                    belongs_to[i] = j;
+                    sq_dist = new_sq_dist;
+                }
+            }
+            if (sq_dist>radiuses[belongs_to[i]]) {
+                radiuses[belongs_to[i]] = sq_dist;
+            }
+            count[belongs_to[i]]++;
+        }
+
+        bool converged = false;
+        int iteration = 0;
+        while (!converged && iteration<iterations_) {
+            converged = true;
+            iteration++;
+
+            // compute the new cluster centers
+            for (int i=0; i<branching; ++i) {
+                memset(dcenters[i],0,sizeof(double)*veclen_);
+                radiuses[i] = 0;
+            }
+            for (int i=0; i<indices_length; ++i) {
+                ElementType* vec = points_[indices[i]];
+                double* center = dcenters[belongs_to[i]];
+                for (size_t k=0; k<veclen_; ++k) {
+                    center[k] += vec[k];
+                }
+            }
+            for (int i=0; i<branching; ++i) {
+                int cnt = count[i];
+                double div_factor = 1.0/cnt;
+                for (size_t k=0; k<veclen_; ++k) {
+                    dcenters[i][k] *= div_factor;
+                }
+            }
+
+            // reassign points to clusters
+            for (int i=0; i<indices_length; ++i) {
+                DistanceType sq_dist = distance_(points_[indices[i]], dcenters[0], veclen_);
+                int new_centroid = 0;
+                for (int j=1; j<branching; ++j) {
+                    DistanceType new_sq_dist = distance_(points_[indices[i]], dcenters[j], veclen_);
+                    if (sq_dist>new_sq_dist) {
+                        new_centroid = j;
+                        sq_dist = new_sq_dist;
+                    }
+                }
+                if (sq_dist>radiuses[new_centroid]) {
+                    radiuses[new_centroid] = sq_dist;
+                }
+                if (new_centroid != belongs_to[i]) {
+                    count[belongs_to[i]]--;
+                    count[new_centroid]++;
+                    belongs_to[i] = new_centroid;
+
+                    converged = false;
+                }
+            }
+
+            for (int i=0; i<branching; ++i) {
+                // if one cluster converges to an empty cluster,
+                // move an element into that cluster
+                if (count[i]==0) {
+                    int j = (i+1)%branching;
+                    while (count[j]<=1) {
+                        j = (j+1)%branching;
+                    }
+
+                    for (int k=0; k<indices_length; ++k) {
+                        if (belongs_to[k]==j) {
+                            belongs_to[k] = i;
+                            count[j]--;
+                            count[i]++;
+                            break;
+                        }
+                    }
+                    converged = false;
+                }
+            }
+
+        }
+
+        std::vector<DistanceType*> centers(branching);
+
+        for (int i=0; i<branching; ++i) {
+            centers[i] = new DistanceType[veclen_];
+            memoryCounter_ += veclen_*sizeof(DistanceType);
+            for (size_t k=0; k<veclen_; ++k) {
+                centers[i][k] = (DistanceType)dcenters[i][k];
+            }
+        }
+
+
+        // compute kmeans clustering for each of the resulting clusters
+        node->childs.resize(branching);
+        int start = 0;
+        int end = start;
+        for (int c=0; c<branching; ++c) {
+            int s = count[c];
+
+            DistanceType variance = 0;
+            for (int i=0; i<indices_length; ++i) {
+                if (belongs_to[i]==c) {
+                    variance += distance_(centers[c], points_[indices[i]], veclen_);
+                    std::swap(indices[i],indices[end]);
+                    std::swap(belongs_to[i],belongs_to[end]);
+                    end++;
+                }
+            }
+            variance /= s;
+
+            node->childs[c] = new(pool_) Node();
+            node->childs[c]->radius = radiuses[c];
+            node->childs[c]->pivot = centers[c];
+            node->childs[c]->variance = variance;
+            computeClustering(node->childs[c],indices+start, end-start, branching);
+            start=end;
+        }
+
+        delete[] dcenters.ptr();
+    }
+    */
 
     template<bool with_removed>
     void findNeighborsWithRemoved(ResultSet<DistanceType>& result, const ElementType* vec, const SearchParams& searchParams) const
