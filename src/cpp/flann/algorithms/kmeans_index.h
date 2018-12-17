@@ -56,7 +56,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
-#define JSON_PATH "/tree.json"
+#include <cstdlib>
 
 
 namespace flann
@@ -648,8 +648,10 @@ private:
      */
 
      void computeClustering(NodePtr node, int* indices, int indices_length, int branching){
+       std::string tree_file_path = std::string(std::getenv("HOME")) + std::string("/tree.json");
+
        boost::property_tree::ptree root;
-       boost::property_tree::read_json(JSON_PATH, root);
+       boost::property_tree::read_json(tree_file_path, root);
 
        parseTree(node, root);
      }
