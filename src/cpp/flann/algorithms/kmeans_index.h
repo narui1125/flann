@@ -648,7 +648,7 @@ private:
      */
 
      void computeClustering(NodePtr node, int* indices, int indices_length, int branching){
-       std::string tree_file_path = std::string(std::getenv("HOME")) + std::string("/tree.json");
+       std::string tree_file_path = std::string(std::getenv("FLANN_TREE_PATH"));
 
        boost::property_tree::ptree root;
        boost::property_tree::read_json(tree_file_path, root);
