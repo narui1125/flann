@@ -653,6 +653,8 @@ private:
        boost::property_tree::ptree root;
        boost::property_tree::read_json(tree_file_path, root);
 
+       std::cout << "Tree Path: " << tree_file_path << std::endl;
+
        parseTree(node, root);
      }
 
