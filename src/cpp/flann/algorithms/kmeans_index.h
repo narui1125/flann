@@ -924,10 +924,12 @@ private:
      */
     int exploreNodeBranches(NodePtr node, const ElementType* q, Heap<BranchSt>* heap) const
     {
-        std::vector<DistanceType> domain_distances(branching_);
+        int n_cluster = node->childs.size();
+
+        std::vector<DistanceType> domain_distances(n_cluster);
         int best_index = 0;
         domain_distances[best_index] = distance_(q, node->childs[best_index]->pivot, veclen_);
-        for (int i=1; i<branching_; ++i) {
+        for (int i=1; i<n_cluster; ++i) {
             domain_distances[i] = distance_(q, node->childs[i]->pivot, veclen_);
             if (domain_distances[i]<domain_distances[best_index]) {
                 best_index = i;
@@ -935,7 +937,7 @@ private:
         }
 
         //		float* best_center = node->childs[best_index]->pivot;
-        for (int i=0; i<branching_; ++i) {
+        for (int i=0; i<n_cluster; ++i) {
             if (i != best_index) {
                 domain_distances[i] -= cb_index_*node->childs[i]->variance;
 
@@ -972,6 +974,8 @@ private:
             }
         }
 
+        int n_cluster = node->childs.size();
+
         if (node->childs.empty()) {
             for (int i=0; i<node->size; ++i) {
             	PointInfo& point_info = node->points[i];
@@ -984,10 +988,10 @@ private:
             }
         }
         else {
-            std::vector<int> sort_indices(branching_);
+            std::vector<int> sort_indices(n_cluster);
             getCenterOrdering(node, vec, sort_indices);
 
-            for (int i=0; i<branching_; ++i) {
+            for (int i=0; i<n_cluster; ++i) {
                 findExactNN<with_removed>(node->childs[sort_indices[i]],result,vec);
             }
 
@@ -1002,8 +1006,10 @@ private:
      */
     void getCenterOrdering(NodePtr node, const ElementType* q, std::vector<int>& sort_indices) const
     {
-        std::vector<DistanceType> domain_distances(branching_);
-        for (int i=0; i<branching_; ++i) {
+        int n_cluster = node->childs.size();
+
+        std::vector<DistanceType> domain_distances(n_cluster);
+        for (int i=0; i<n_cluster; ++i) {
             DistanceType dist = distance_(q, node->childs[i]->pivot, veclen_);
 
             int j=0;
@@ -1060,9 +1066,11 @@ private:
             for (int i=0; i<clusterCount; ++i) {
                 if (!clusters[i]->childs.empty()) {
 
+                    int n_cluster = clusters[i]->childs.size();
+
                     DistanceType variance = meanVariance - clusters[i]->variance*clusters[i]->size;
 
-                    for (int j=0; j<branching_; ++j) {
+                    for (int j=0; j<n_cluster; ++j) {
                         variance += clusters[i]->childs[j]->variance*clusters[i]->childs[j]->size;
                     }
                     if (variance<minVariance) {
