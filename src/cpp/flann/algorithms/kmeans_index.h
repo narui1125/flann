@@ -37,7 +37,6 @@
 #include <cassert>
 #include <limits>
 #include <cmath>
-#include <iostream>
 
 #include "flann/general.h"
 #include "flann/algorithms/nn_index.h"
@@ -51,12 +50,6 @@
 #include "flann/util/saving.h"
 #include "flann/util/logger.h"
 
-//自作関数
-#include <boost/foreach.hpp>
-#include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/json_parser.hpp>
-
-#include <cstdlib>
 
 
 namespace flann
@@ -225,7 +218,7 @@ public:
         size_t old_size = size_;
 
         extendDataset(points);
-
+        
         if (rebuild_threshold>1 && size_at_build_*rebuild_threshold<size_) {
             buildIndex();
         }
@@ -233,7 +226,7 @@ public:
             for (size_t i=0;i<points.rows;++i) {
                 DistanceType dist = distance_(root_->pivot, points[i], veclen_);
                 addPointToTree(root_, old_size + i, dist);
-            }
+            }            
         }
     }
 
@@ -349,13 +342,6 @@ protected:
         root_ = new(pool_) Node();
         computeNodeStatistics(root_, indices);
         computeClustering(root_, &indices[0], (int)size_, branching_);
-
-        /*
-        std::cout << "variance: " << root_->variance << std::endl;
-        std::cout << "radius: " << root_->radius << std::endl;
-        std::cout << "pivot: " << root_->pivot << std::endl;
-        printTree(root_, 0);
-        */
     }
 
 private:
@@ -525,7 +511,7 @@ private:
         for (size_t j=0; j<veclen_; ++j) {
             mean[j] *= div_factor;
         }
-
+        
         DistanceType radius = 0;
         DistanceType variance = 0;
         for (size_t i=0; i<size; ++i) {
@@ -534,7 +520,7 @@ private:
                 radius = dist;
             }
             variance += dist;
-        }
+        }        
         variance /= size;
 
         node->variance = variance;
@@ -543,97 +529,6 @@ private:
         node->pivot = mean;
     }
 
-    /**
-    * 自作関数
-    */
-    void printTree(NodePtr node, int depth){
-
-      if((node->points).size() != 0){
-        for(int i = 0; i < depth; i++){
-          std::cout << "-" << std::flush;
-        }
-        for(int p = 0; p < (node->points).size(); p++){
-          std::cout << (node->points)[p].index << "," << std::flush;
-        }
-        std::cout << std::endl;
-      }
-
-      for(int c = 0; c < (node->childs).size(); c++){
-        printTree((node->childs)[c], depth+1);
-      }
-    }
-
-    /**
-    * 自作関数
-    */
-    std::vector<int> getLeafs(NodePtr node){
-      std::vector<int> result;
-
-      for(auto elem: node->points){
-        result.push_back(elem.index);
-      }
-
-      for(auto child: node->childs){
-        std::vector<int> child_points = getLeafs(child);
-        for(auto elem: child_points){
-          result.push_back(elem);
-        }
-      }
-
-      return result;
-    }
-
-    /**
-    * 自作関数
-    */
-    NodePtr parseTree(NodePtr node, const boost::property_tree::ptree &json_node){
-      //points
-      for(auto &clusters: json_node.get_child("points")){
-        //葉ノードを作成
-        struct Node *child_node = new(pool_) Node();
-
-        child_node->points.resize(clusters.second.size());
-        int count = 0;
-
-        for(auto &points : clusters.second){
-          int index = points.second.get_value<int>();
-          child_node->points[count].index = index;
-          child_node->points[count].point = points_[index];
-          count++;
-        }
-        child_node->childs.clear();
-
-        auto indices = getLeafs(child_node);
-        child_node->size = indices.size();
-
-        computeNodeStatistics(child_node, indices);
-        //節ノードに葉ノードを追加
-        node->childs.push_back(child_node);
-      }
-
-      //childs
-      BOOST_FOREACH(const boost::property_tree::ptree::value_type& child, json_node.get_child("childs")){
-        const boost::property_tree::ptree& childs = child.second;
-
-        struct Node *child_node = new(pool_) Node();
-        parseTree(child_node, childs);
-
-        auto indices = getLeafs(child_node);
-        child_node->size = indices.size();
-
-        computeNodeStatistics(child_node, indices);
-
-        //節ノードに節ノードを追加
-        node->childs.push_back(child_node);
-      }
-
-      auto indices = getLeafs(node);
-      node->size = indices.size();
-
-      computeNodeStatistics(node, indices);
-
-      return node;
-    }
 
     /**
      * The method responsible with actually doing the recursive hierarchical
@@ -646,23 +541,7 @@ private:
      *
      * TODO: for 1-sized clusters don't store a cluster center (it's the same as the single cluster point)
      */
-
-     void computeClustering(NodePtr node, int* indices, int indices_length, int branching){
-       std::string tree_file_path = std::string(std::getenv("FLANN_TREE_PATH"));
-
-       boost::property_tree::ptree root;
-       boost::property_tree::read_json(tree_file_path, root);
-
-       std::cout << "Tree Path: " << tree_file_path << std::endl;
-
-       parseTree(node, root);
-     }
-
-     /*
-      元々のkMeans
-     */
-     /*
-     void computeClustering(NodePtr node, int* indices, int indices_length, int branching)
+    void computeClustering(NodePtr node, int* indices, int indices_length, int branching)
     {
         node->size = indices_length;
 
@@ -832,7 +711,7 @@ private:
 
         delete[] dcenters.ptr();
     }
-    */
+
 
     template<bool with_removed>
     void findNeighborsWithRemoved(ResultSet<DistanceType>& result, const ElementType* vec, const SearchParams& searchParams) const
@@ -924,12 +803,10 @@ private:
      */
     int exploreNodeBranches(NodePtr node, const ElementType* q, Heap<BranchSt>* heap) const
     {
-        int n_cluster = node->childs.size();
-
-        std::vector<DistanceType> domain_distances(n_cluster);
+        std::vector<DistanceType> domain_distances(branching_);
         int best_index = 0;
         domain_distances[best_index] = distance_(q, node->childs[best_index]->pivot, veclen_);
-        for (int i=1; i<n_cluster; ++i) {
+        for (int i=1; i<branching_; ++i) {
             domain_distances[i] = distance_(q, node->childs[i]->pivot, veclen_);
             if (domain_distances[i]<domain_distances[best_index]) {
                 best_index = i;
@@ -937,7 +814,7 @@ private:
         }
 
         //		float* best_center = node->childs[best_index]->pivot;
-        for (int i=0; i<n_cluster; ++i) {
+        for (int i=0; i<branching_; ++i) {
             if (i != best_index) {
                 domain_distances[i] -= cb_index_*node->childs[i]->variance;
 
@@ -974,8 +851,6 @@ private:
             }
         }
 
-        int n_cluster = node->childs.size();
-
         if (node->childs.empty()) {
             for (int i=0; i<node->size; ++i) {
             	PointInfo& point_info = node->points[i];
@@ -988,10 +863,10 @@ private:
             }
         }
         else {
-            std::vector<int> sort_indices(n_cluster);
+            std::vector<int> sort_indices(branching_);
             getCenterOrdering(node, vec, sort_indices);
 
-            for (int i=0; i<n_cluster; ++i) {
+            for (int i=0; i<branching_; ++i) {
                 findExactNN<with_removed>(node->childs[sort_indices[i]],result,vec);
             }
 
@@ -1006,10 +881,8 @@ private:
      */
     void getCenterOrdering(NodePtr node, const ElementType* q, std::vector<int>& sort_indices) const
     {
-        int n_cluster = node->childs.size();
-
-        std::vector<DistanceType> domain_distances(n_cluster);
-        for (int i=0; i<n_cluster; ++i) {
+        std::vector<DistanceType> domain_distances(branching_);
+        for (int i=0; i<branching_; ++i) {
             DistanceType dist = distance_(q, node->childs[i]->pivot, veclen_);
 
             int j=0;
@@ -1066,11 +939,9 @@ private:
             for (int i=0; i<clusterCount; ++i) {
                 if (!clusters[i]->childs.empty()) {
 
-                    int n_cluster = clusters[i]->childs.size();
-
                     DistanceType variance = meanVariance - clusters[i]->variance*clusters[i]->size;
 
-                    for (int j=0; j<n_cluster; ++j) {
+                    for (int j=0; j<branching_; ++j) {
                         variance += clusters[i]->childs[j]->variance*clusters[i]->childs[j]->size;
                     }
                     if (variance<minVariance) {
@@ -1096,7 +967,7 @@ private:
         varianceValue = meanVariance/root->size;
         return clusterCount;
     }
-
+    
     void addPointToTree(NodePtr node, size_t index, DistanceType dist_to_pivot)
     {
         ElementType* point = points_[index];
@@ -1106,7 +977,7 @@ private:
         // if radius changed above, the variance will be an approximation
         node->variance = (node->size*node->variance+dist_to_pivot)/(node->size+1);
         node->size++;
-
+        
         if (node->childs.empty()) { // leaf node
         	PointInfo point_info;
         	point_info.index = index;
@@ -1122,7 +993,7 @@ private:
                 computeClustering(node, &indices[0], indices.size(), branching_);
             }
         }
-        else {
+        else {            
             // find the closest child
             int closest = 0;
             DistanceType dist = distance_(node->childs[closest]->pivot, point, veclen_);
@@ -1134,7 +1005,7 @@ private:
                 }
             }
             addPointToTree(node->childs[closest], index, dist);
-        }
+        }                
     }
 
 
@@ -1168,7 +1039,7 @@ private:
      * of the cluster.
      */
     float cb_index_;
-
+    
     /**
      * The root node in the tree.
      */

@@ -96,6 +96,10 @@ flann::IndexParams create_parameters(FLANNParameters* p)
         params["multi_probe_level"] = p->multi_probe_level_;
     }
 
+    if (p->algorithm == FLANN_INDEX_CLUSTER) {
+        params["tree_path"] = p->tree_path_;
+    }
+
     params["log_level"] = p->log_level;
     params["random_seed"] = p->random_seed;
 
@@ -1317,4 +1321,3 @@ int flann_compute_cluster_centers_int(int* dataset, int rows, int cols, int clus
 {
     return _flann_compute_cluster_centers(dataset, rows, cols, clusters, result, flann_params);
 }
-

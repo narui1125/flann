@@ -72,6 +72,9 @@ struct FLANNParameters
     unsigned int key_size_;     /** The length of the key in the hash tables */
     unsigned int multi_probe_level_; /** Number of levels to use in multi-probe LSH, 0 for standard LSH */
 
+    /* Cluster parameters */
+    char* tree_path_; /** The number of hash tables to use */
+
     /* other parameters */
     enum flann_log_level_t log_level;    /* determines the verbosity of each flann function */
     long random_seed;            /* random seed to use */
@@ -606,4 +609,3 @@ FLANN_EXPORT int flann_compute_cluster_centers_int(int* dataset,
 
 
 #endif /*FLANN_H_*/
-
