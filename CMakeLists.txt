@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 2.6)
 
+set(CMAKE_CXX_FLAGS "-std=c++17")
+
 if(COMMAND cmake_policy)
     cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
@@ -112,7 +114,7 @@ if (USE_MPI AND HDF5_IS_PARALLEL)
 endif()
 
 
-find_package(GTest) 
+find_package(GTest)
 if (NOT GTEST_FOUND)
 	message(WARNING "gtest library not found, some tests will not be run")
 endif()
@@ -191,7 +193,7 @@ find_program(PACKAGE_MAKER_PROGRAM PackageMaker
 if(EXISTS ${PACKAGE_MAKER_PROGRAM})
   list(APPEND CPACK_GENERATOR "PackageMaker")
 endif(EXISTS ${PACKAGE_MAKER_PROGRAM})
- 
+
 set(CPACK_GENERATOR "${CPACK_GENERATOR}")
 set(CPACK_MONOLITHIC_INSTALL 1)
 set(CPACK_SET_DESTDIR ON)
