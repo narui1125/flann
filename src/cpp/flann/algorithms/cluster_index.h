@@ -37,7 +37,7 @@ namespace flann
 
   struct ClusterIndexParams : public IndexParams
   {
-    ClusterIndexParams(std::string tree_path = std::string(std::getenv("FLANN_TREE_PATH")), float cb_index = 0.2)
+    ClusterIndexParams(std::string tree_path = std::string("tree.json"), float cb_index = 0.2)
     {
       (* this)["algorithm"] = FLANN_INDEX_CLUSTER;
       //外部ツリーパス
@@ -74,7 +74,7 @@ namespace flann
     ClusterIndex(const Matrix<ElementType>& input_data, const IndexParams& params = ClusterIndexParams(), Distance d = Distance()) :
     BaseClass(params, d), root_(NULL), memoryCounter_(0)
     {
-      tree_path_ = get_param(params,"tree_path",std::string(std::getenv("FLANN_TREE_PATH")));
+      tree_path_ = get_param(params,"tree_path",std::string(""));
       cb_index_  = get_param(params,"cb_index",0.4f);
       setDataset(input_data);
     }
@@ -88,7 +88,7 @@ namespace flann
     ClusterIndex(const IndexParams& params = ClusterIndexParams(), Distance d = Distance()) :
     BaseClass(params, d), root_(NULL), memoryCounter_(0)
     {
-      tree_path_ = get_param(params,"tree_path", std::string(std::getenv("FLANN_TREE_PATH")));
+      tree_path_ = get_param(params,"tree_path", std::string("tree.json"));
       cb_index_  = get_param(params,"cb_index",0.4f);
     }
 
