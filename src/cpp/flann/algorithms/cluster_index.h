@@ -399,20 +399,13 @@ namespace flann
     std::vector<int> getLeafs(NodePtr node){
       std::vector<int> result;
 
-      for(int i = 0; i < node->points.size(); i++){
-        PointInfo elem = node->points[i];
-
+      for(auto elem: node->points){
         result.push_back(elem.index);
       }
 
-      for(int i = 0; i < node->childs.size(); i++){
-        Node* child = node->childs[i];
-
+      for(auto child: node->childs){
         std::vector<int> child_points = getLeafs(child);
-
-        for(int j = 0; j < child_points.size(); j++){
-          int elem = child_points[j];
-
+        for(auto elem: child_points){
           result.push_back(elem);
         }
       }
@@ -425,14 +418,14 @@ namespace flann
     */
     NodePtr parseTree(NodePtr node, const boost::property_tree::ptree &json_node){
       //points
-      BOOST_FOREACH (const boost::property_tree::ptree::value_type& clusters, json_node.get_child("points")) {
+      for(auto &clusters: json_node.get_child("points")){
         //葉ノードを作成
         struct Node *child_node = new(pool_) Node();
 
         child_node->points.resize(clusters.second.size());
         int count = 0;
 
-        BOOST_FOREACH (const boost::property_tree::ptree::value_type& points, clusters.second) {
+        for(auto &points : clusters.second){
           int index = points.second.get_value<int>();
           child_node->points[count].index = index;
           child_node->points[count].point = points_[index];
@@ -440,7 +433,7 @@ namespace flann
         }
         child_node->childs.clear();
 
-        std::vector<int> indices = getLeafs(child_node);
+        auto indices = getLeafs(child_node);
         child_node->size = indices.size();
 
         computeNodeStatistics(child_node, indices);
@@ -455,7 +448,7 @@ namespace flann
         struct Node *child_node = new(pool_) Node();
         parseTree(child_node, childs);
 
-        std::vector<int> indices = getLeafs(child_node);
+        auto indices = getLeafs(child_node);
         child_node->size = indices.size();
 
         computeNodeStatistics(child_node, indices);
@@ -464,7 +457,7 @@ namespace flann
         node->childs.push_back(child_node);
       }
 
-      std::vector<int> indices = getLeafs(node);
+      auto indices = getLeafs(node);
       node->size = indices.size();
 
       computeNodeStatistics(node, indices);
